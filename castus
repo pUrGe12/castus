@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""castus — SIL verification gate for emulated edge-ML firmware.
+
+Boots (or replays) a firmware image under the Espressif QEMU fork, then runs
+checks over the serial output:
+
+    boot       fail on a Guru Meditation panic; auto-symbolize the backtrace
+               (the addr2line decode you'd otherwise do by hand, AFTER a crash)
+    inference  fail when outputs drift from a trusted golden log
+
+Demo default is REPLAY: it reads a real captured boot log (scenarios/<x>/boot.log,
+staged into build/) so a recording is deterministic and instant. Pass --live to
+actually boot QEMU. Either way the verdict, the symbolization and the drift
+compare run live — only the (slow, noisy) boot is staged.
+"""
+import os
+import re
+import sys
+import time
+import tempfile
+import argparse
+import subprocess
+
+try:
+    import yaml
+except ImportError:
+    sys.exit("castus: needs pyyaml  ->  pip install pyyaml")
+
+# --- board registry: a new board plugs in HERE (+ its QEMU machine) ----------
+BOARDS = {
+    "esp32":   {"machine": "esp32",   "toolchain": "xtensa-esp32-elf"},
+    # "esp32s3": {"machine": "esp32s3", "toolchain": "xtensa-esp32s3-elf"},
+    # "esp32c3": {"machine": "esp32c3", "toolchain": "riscv32-esp-elf"},
+}
+
+# --- tiny ANSI helpers -------------------------------------------------------
+def _c(code):
+    return "" if os.environ.get("NO_COLOR") else code
+G, R, Y, DIM, X = _c("\033[32m"), _c("\033[31m"), _c("\033[33m"), _c("\033[2m"), _c("\033[0m")
+ok  = lambda s: f"{G}{s}{X}"
+err = lambda s: f"{R}{s}{X}"
+def step(s): print(f"{DIM}▸{X} {s}")
+
+PANIC  = re.compile(r"Guru Meditation|assert failed")
+EXCV   = re.compile(r"EXCVADDR\s*:\s*(0x[0-9a-fA-F]+)")
+BT     = re.compile(r"Backtrace:\s*((?:0x[0-9a-fA-F]+:0x[0-9a-fA-F]+\s*)+)")
+SAMPLE = re.compile(r"x_value:\s*-?[\d.]+,\s*y_value:\s*-?[\d.]+")
+
+
+def which(binary):
+    return any(os.access(os.path.join(d, binary), os.X_OK)
+               for d in os.environ.get("PATH", "").split(os.pathsep))
+
+
+def capture(cfg, live, want_samples=200, timeout=60):
+    """Return the firmware's serial output: from QEMU (live) or a replay log."""
+    replay = cfg.get("boot", {}).get("replay")
+    if not live and replay:
+        with open(replay) as f:
+            return f.read()
+    board = BOARDS[cfg["board"]]
+    cmd = ["qemu-system-xtensa", "-nographic", "-machine", board["machine"],
+           "-drive", f"file={cfg['build']['image']},if=mtd,format=raw"]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    out, n, deadline = [], 0, time.monotonic() + timeout
+    try:
+        for line in p.stdout:
+            out.append(line)
+            if PANIC.search(line):
+                out += [p.stdout.readline() for _ in range(6)]   # flush the backtrace
+                break
+            if SAMPLE.search(line):
+                n += 1
+                if n >= want_samples:
+                    break
+            if time.monotonic() > deadline:
+                break
+    finally:
+        p.terminate()
+    return "".join(out)
+
+
+def symbolize(cfg, log):
+    """Turn the raw 'Backtrace: 0x..:0x..' line into function/file:line frames."""
+    m = BT.search(log)
+    if not m:
+        return None
+    pcs = [pair.split(":")[0] for pair in m.group(1).split()]
+    elf = cfg["build"].get("elf", "")
+    a2l = BOARDS[cfg["board"]]["toolchain"] + "-addr2line"
+    if not os.path.exists(elf) or not which(a2l):
+        hint = f"{DIM}(symbols unavailable — set build.elf + install {a2l}){X}"
+        return [f"{pc}  {hint}" for pc in pcs]
+    out = subprocess.run([a2l, "-pfiaC", "-e", elf, *pcs],
+                         capture_output=True, text=True).stdout
+    return out.splitlines()
+
+
+def find_compare():
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in ("checks/compare.py", os.path.join(here, "checks/compare.py")):
+        if os.path.exists(path):
+            return path
+    sys.exit("castus: cannot find checks/compare.py")
+
+
+def check_boot(cfg, log):
+    step(f"boot  · qemu-system-xtensa -machine {cfg['board']}")
+    if not PANIC.search(log):
+        print("        " + ok("ok  (no panic)"))
+        return True
+    print("        " + err("PANIC ✗"))
+    e = EXCV.search(log)
+    if e:
+        print(f"        fault  EXCVADDR={e.group(1)}")
+    frames = symbolize(cfg, log)
+    if frames:
+        print("        decoded backtrace:")
+        for i, f in enumerate(frames):
+            print(f"          #{i}  {f}")
+    return False
+
+
+def check_inference(cfg, log, opts):
+    golden, tol = opts["golden"], opts.get("tol", 0.05)
+    step(f"inference  · vs {golden}  (tol {tol})")
+    with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as f:
+        f.write(log)
+        test = f.name
+    r = subprocess.run([sys.executable, find_compare(), golden, test],
+                       capture_output=True, text=True)
+    for line in (r.stdout or r.stderr).strip().splitlines():
+        print("        " + line)
+    passed = r.returncode == 0
+    print("        " + (ok("ok") if passed else err("FAIL ✗")))
+    return passed
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="castus")
+    ap.add_argument("--verify", metavar="PATH", help="project dir with .castus-config.yaml")
+    ap.add_argument("--live", action="store_true", help="boot QEMU instead of replaying a log")
+    a = ap.parse_args()
+    if not a.verify:
+        ap.error("nothing to do — try:  castus --verify .")
+    os.chdir(a.verify)
+    cfg = yaml.safe_load(open(".castus-config.yaml"))
+
+    mode = "live qemu" if a.live else "replay"
+    print(f"{Y}castus{X} 0.1  ·  {cfg['project']}  ·  board {cfg['board']}  {DIM}({mode}){X}\n")
+
+    replaying = (not a.live) and cfg.get("boot", {}).get("replay")
+    artifact = cfg["boot"]["replay"] if replaying else cfg["build"]["image"]
+    status = "up to date (cached)" if os.path.exists(artifact) else err("MISSING")
+    step(f"build  · {status}   {DIM}{artifact}{X}")
+
+    log = capture(cfg, a.live, timeout=cfg.get("boot", {}).get("timeout", 60))
+
+    passed = True
+    for spec in cfg["checks"]:
+        name = spec if isinstance(spec, str) else next(iter(spec))
+        opts = {} if isinstance(spec, str) else spec[name]
+        if name == "inference" and not passed:
+            step("inference  · skipped (boot failed)")
+            continue
+        if name == "boot":
+            passed &= check_boot(cfg, log)
+        elif name == "inference":
+            passed &= check_inference(cfg, log, opts)
+
+    print("\n" + (ok("RESULT  PASS ✓   exit 0") if passed
+                  else err("RESULT  FAIL ✗   exit 1")))
+    sys.exit(0 if passed else 1)
+
+
+if __name__ == "__main__":
+    main()
