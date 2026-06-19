@@ -1,14 +1,14 @@
 # Castus template @ 0.1 DJINN
 
 project: hello_world          # esp-tflite-micro sine model (TFLM)
-board:   esp32                # -> qemu machine + xtensa-esp32-elf toolchain (see BOARDS in ./castus)
+board:   esp32
 
 build:
-  image: build/flash.bin             # merged qemu image (idf.py build + esptool merge_bin)
+  image: build/flash.bin
   elf:   build/hello_world.elf       # symbols, for backtrace decoding
 
 boot:
-  replay:  build/boot.log            # DEMO: replay a real capture. Pass --live to boot qemu.
+  replay:  build/boot.log            # DEMO: replay a real capture. Pass --live to boot.
   timeout: 60                        # seconds (live mode only)
 
 checks:

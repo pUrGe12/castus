@@ -10,10 +10,10 @@ FW    ?= $(HOME)/esp/esp-tflite-micro/examples/hello_world
 help:
 	@echo "make scene NAME=clean|arena|drift   stage a scenario into build/"
 	@echo "make verify                         run castus over build/ (replay)"
-	@echo "make live                           run castus, booting real qemu"
+	@echo "make live                           run castus, booting"
 	@echo "make lint [FW=/path/to/firmware]    esp-clang static analysis in the firmware project"
 	@echo "make test-host                      compile + run host unit tests (green)"
-	@echo "make capture                        regenerate real boot logs (needs qemu + bins)"
+	@echo "make capture                        regenerate real boot logs"
 
 # Stand-in for `git checkout bug/<name> && idf.py build` on the real box:
 # populates build/ with that scenario's captured artifacts.

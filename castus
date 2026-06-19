@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """castus — SIL verification gate for emulated edge-ML firmware.
 
-Boots (or replays) a firmware image under the Espressif QEMU fork, then runs
+Boots (or replays) a firmware image under the fork, then runs
 checks over the serial output:
 
     boot       fail on a Guru Meditation panic; auto-symbolize the backtrace
@@ -10,7 +10,7 @@ checks over the serial output:
 
 Demo default is REPLAY: it reads a real captured boot log (scenarios/<x>/boot.log,
 staged into build/) so a recording is deterministic and instant. Pass --live to
-actually boot QEMU. Either way the verdict, the symbolization and the drift
+actually boot. Either way the verdict, the symbolization and the drift
 compare run live — only the (slow, noisy) boot is staged.
 """
 import os
@@ -105,7 +105,7 @@ def find_compare():
 
 
 def check_boot(cfg, log):
-    step(f"boot  · qemu-system-xtensa -machine {cfg['board']}")
+    step(f"boot  · -machine {cfg['board']}")
     if not PANIC.search(log):
         print("        " + ok("ok  (no panic)"))
         return True
