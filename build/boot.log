@@ -1,10 +1,17 @@
-x_value: 0.000000, y_value: 0.000000
-x_value: 0.314159, y_value: 0.372770
-x_value: 0.628319, y_value: 0.559154
-x_value: 0.942478, y_value: 0.838731
-x_value: 1.256637, y_value: 0.965812
-x_value: 1.570796, y_value: 1.042060
-x_value: 1.884956, y_value: 0.957340
-x_value: 2.199115, y_value: 0.821787
-x_value: 2.513274, y_value: 0.533738
-x_value: 2.827433, y_value: 0.237217
+I (1946) main_task: Calling app_main()
+Failed to resize buffer. Requested: 144, available 76, missing: 68
+Failed starting model allocation.
+
+AllocateTensors() failed -- IGNORING (part of the bug)
+Guru Meditation Error: Core  0 panic'ed (LoadProhibited). Exception was unhandled.
+
+Core  0 register dump:
+PC      : 0x400d62a3  PS      : 0x00060f30  A0      : 0x800d609d  A1      : 0x3ffb4590
+A2      : 0x3ffb2d00  A3      : 0x00000000  A4      : 0x3ffb2c78  A5      : 0x3ffb2d70
+A6      : 0x3ffb2c88  A7      : 0x3ffb2d00  A8      : 0x00000000  A9      : 0x000000e0
+A10     : 0x0000000e  A11     : 0x00000008  A12     : 0x00000001  A13     : 0x00000004
+A14     : 0x00000000  A15     : 0x3ffb2e64  SAR     : 0x00000004  EXCCAUSE: 0x0000001c
+EXCVADDR: 0x00000000  LBEG    : 0x400d61b9  LEND    : 0x400d61bd  LCOUNT  : 0x00000000
+
+
+Backtrace: 0x400d62a0:0x3ffb4590 0x400d609a:0x3ffb45b0 0x400d5f03:0x3ffb4600 0x400e3294:0x3ffb4620
