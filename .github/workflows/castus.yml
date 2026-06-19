@@ -1,24 +1,27 @@
 name: firmware-ci
-on: [pull_request]
+on: [push, pull_request]
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    container: espressif/idf:release-v5.5     # esp-idf + xtensa toolchain (addr2line) + qemu
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: deps
+        run: |
+          pip install pyyaml
+          sudo apt-get update -qq && sudo apt-get install -y -qq cppcheck
 
-      - name: Static analysis (esp-clang)
-        run: idf.py clang-check || true        # noisy warnings — none of them the real bug
+      - name: Static analysis (cppcheck)
+        run: cppcheck --quiet firmware/main_functions.cc      # green: the bug is valid code
 
       - name: Host unit tests
-        run: make test-host                    # green
+        run: mkdir -p build && make test-host                 # green
 
-      # In a real repo this is `idf.py build` of the PR's firmware. For a
-      # deterministic demo we stage a captured scenario (replay). Use --live to
-      # boot qemu for real.
-      - name: Build firmware image
-        run: make scene NAME=arena
-
-      - name: castus SIL gate                  # <-- this is what goes red and blocks the PR
-        run: ./castus --verify .
+      - name: castus SIL gate
+        run: |
+          S=$(bash scripts/which-scenario.sh)
+          echo "::notice title=castus::firmware resolves to scenario '$S'"
+          make scene NAME=$S
+          ./castus --verify .                                 # <-- red when S != clean
