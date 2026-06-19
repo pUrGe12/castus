@@ -1,7 +1,4 @@
-# castus — per-project verification config.
-# Identical across all three scenarios: the firmware (in build/) decides what
-# gets caught. `make scene NAME=arena` (or, on the real box, `git checkout
-# bug/arena && idf.py build`) populates build/ with that scenario's artifacts.
+# Castus template @ 0.1 DJINN
 
 project: hello_world          # esp-tflite-micro sine model (TFLM)
 board:   esp32                # -> qemu machine + xtensa-esp32-elf toolchain (see BOARDS in ./castus)
