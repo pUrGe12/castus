@@ -1,0 +1,15 @@
+I (1893) main_task: Started on CPU0
+I (1903) main_task: Calling app_main()
+x_value: 0.000000, y_value: 0.000000
+x_value: 0.314159, y_value: 0.296521
+x_value: 0.628319, y_value: 0.449018
+x_value: 0.942478, y_value: 0.609986
+x_value: 1.256637, y_value: 0.830259
+x_value: 1.570796, y_value: 0.931924
+x_value: 1.884956, y_value: 0.982756
+x_value: 2.199115, y_value: 1.042060
+x_value: 2.513274, y_value: 0.957340
+x_value: 2.827433, y_value: 0.906508
+# NOTE: 10 real samples from the blog's quantization-drift run (input scale * 1.4).
+# No crash — just wrong. Replace with the full ~94-sample capture for recording;
+# the blog's full run reported 84/94 beyond tolerance.
